@@ -756,6 +756,8 @@ class Message(object):
       out.append("int32_t t = 0;")
     if self.is_has_field_type(('string','submessage')):
       out.append("uint32_t length = 0;")
+    if len(self.fields) == 0:
+      out.append("(void) object;")
     return self.render("\n".join(out))
   
   def header(self):
