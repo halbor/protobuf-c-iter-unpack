@@ -307,6 +307,25 @@ def to_underlines(TypeName):
     type_name += c.lower()
   return type_name
 
+def to_TypeName(s):
+  r = ''
+  prev_not_letter = True
+  for c in s:
+    if (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z'):
+      if prev_not_letter:
+        r += c.upper()
+      else:
+        r += c
+      prev_not_letter = False
+    elif c == '.':
+      r += '__'
+      prev_not_letter = True
+    elif c == '_':
+      prev_not_letter = True
+    else:
+      r += c
+  return r
+
 #####################
 # <fields>
 #####################
@@ -601,7 +620,7 @@ class _submessage(_base):
   wire_type = 2
   
   def submessage_type(self):
-    return self._field.message_type.full_name.replace("_","").replace(".","__")
+    return to_TypeName(self._field.message_type.full_name)
   
   def c_type(self):
     return "%s*" % self.submessage_type()
@@ -702,7 +721,7 @@ class Message(object):
     return tree
     
   def MessageType(self):
-    return self.descriptor.full_name.replace("_","").replace(".","__")
+    return to_TypeName(self.descriptor.full_name)
   
   def message_type(self):
     return to_underlines(self.descriptor.full_name).lower().replace(".","__")
