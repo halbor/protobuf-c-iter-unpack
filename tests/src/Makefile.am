@@ -11,6 +11,8 @@ benchmark_LDFLAGS = -lprotobuf-c
 benchmark_cpp_SOURCES = test.pb.cc ssrtb_v6.pb.cc benchmark_cpp.cc
 benchmark_cpp_LDFLAGS = -lprotobuf -lpthread
 
+CLEANFILES = *.pb-c.[ch] *.pb-iter.[ch] *.pyc *.pb.cc *.pb.h
+
 test.pb-c.c: test.proto
 	protoc-c --c_out=. test.proto
 test_pb2.py: test.proto
