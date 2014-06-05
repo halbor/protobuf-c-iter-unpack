@@ -26,12 +26,6 @@ SUCH DAMAGE.
 
 VERSION = "1.4"
 
-import inspect
-import copy
-import sys
-import os
-
-from google.protobuf import message as google_message
 
 TYPE_HEADER_TEMPLATE = """
 int ${message_type}__iter_unpack(const uint8_t* buffer, size_t buffer_size, uint8_t* memory, size_t memory_size);
@@ -340,9 +334,9 @@ def field(C):
 	C.type_name = type_name
 	return C
 
-def get_field(protobuf_field):
+def get_field(protobuf_field, message):
 	C = FIELD_TYPE_MAP[TYPE_ID_TO_NAME_MAP[protobuf_field.type]]
-	return C(protobuf_field)
+	return C(protobuf_field, message)
 
 class _base(object):
 	"""
@@ -351,8 +345,9 @@ class _base(object):
 	"""
 	repeated_init_size = 4
 
-	def __init__(self, protobuf_field):
+	def __init__(self, protobuf_field, message):
 		self._field = protobuf_field
+		self._message = message
 
 	def render(self, data):
 		if isinstance(data, (list,)):
@@ -618,17 +613,22 @@ class _submessage(_base):
 	"""
 	wire_type = 2
 
+	def field_full_name(self):
+		if self._field.type_name.startswith('.'):
+			return self._field.type_name[1:]
+		return self._message.full_name + '.' + self._field.type_name
+
 	def submessage_type(self):
-		return to_TypeName(self._field.message_type.full_name)
+		return to_TypeName(self.field_full_name())
 
 	def c_type(self):
 		return "%s*" % self.submessage_type()
 
 	def submessage_unpack(self):
-		return to_underlines(self._field.message_type.full_name).lower().replace(".","__")+"__iter_unpack"
+		return to_underlines(self.field_full_name()).lower().replace(".","__")+"__iter_unpack"
 
 	def submessage_merge(self):
-		return to_underlines(self._field.message_type.full_name).lower().replace(".","__")+"__iter_unpack_merge"
+		return to_underlines(self.field_full_name()).lower().replace(".","__")+"__iter_unpack_merge"
 
 	def read_to_field(self):
 		if self.is_repeated():
@@ -696,11 +696,12 @@ class _bytes(_base):
 
 
 class Message(object):
-	def __init__(self, descriptor):
+	def __init__(self, full_name, descriptor):
 		self.descriptor = descriptor
+		self.full_name = full_name
 		self.fields = []
-		for num, field in descriptor.fields_by_number.items():
-			self.fields.append(get_field(field))
+		for field in descriptor.field:
+			self.fields.append(get_field(field, self))
 
 	def render(self, msg):
 		return render(msg, self)
@@ -720,27 +721,27 @@ class Message(object):
 		return tree
 
 	def MessageType(self):
-		return to_TypeName(self.descriptor.full_name)
+		return to_TypeName(self.full_name)
 
 	def message_type(self):
-		return to_underlines(self.descriptor.full_name).lower().replace(".","__")
+		return to_underlines(self.full_name).lower().replace(".","__")
 
 	def MESSAGE_TYPE(self):
-		return to_underlines(self.descriptor.full_name).upper().replace(".","__")
+		return to_underlines(self.full_name).upper().replace(".","__")
 
-	def is_has_repeated_fields(self):
+	def has_repeated_fields(self):
 		for f in self.fields:
 			if f.is_repeated():
 				return True
 		return False
 
-	def is_has_packed_fields(self):
+	def has_packed_fields(self):
 		for f in self.fields:
 			if f.is_packed():
 				return True
 		return False
 
-	def is_has_field_type(self, types):
+	def has_field_type(self, types):
 		for f in self.fields:
 			if f.type_name in types:
 				return True
@@ -748,11 +749,11 @@ class Message(object):
 
 	def additionally_variables(self):
 		out = []
-		if self.is_has_packed_fields():
+		if self.has_packed_fields():
 			out.append("const uint8_t* tmp_buffer_pointer = NULL;")
-		if self.is_has_packed_fields() or self.is_has_field_type(('submessage',)):
+		if self.has_packed_fields() or self.has_field_type(('submessage',)):
 			out.append("int32_t t = 0;")
-		if self.is_has_field_type(('string','submessage')):
+		if self.has_field_type(('string','submessage')):
 			out.append("uint32_t length = 0;")
 		if len(self.fields) == 0:
 			out.append("(void) object;")
@@ -809,30 +810,24 @@ class Message(object):
 
 
 class Module(object):
-	def __init__(self, module):
+	def __init__(self, fdp):
 		self.messages = []
-		self.module = module
-		for k,v in module.__dict__.items():
-			if not inspect.isclass(v):
-				continue
-			if not issubclass(v,google_message.Message):
-				continue
-			self.messages.append(Message(v.DESCRIPTOR))
-
-		# nested messages
-		i = 0
-		while i < len(self.messages):
-			j = i
-			i = len(self.messages)
-			for message in self.messages[j:i]:
-				for submessage in message.descriptor.nested_types:
-					self.messages.append(Message(submessage))
+		self.fdp = fdp
+		def add_messages(prefix, messages):
+			for dp in messages:
+				if len(prefix):
+					full_name = prefix + '.' + dp.name
+				else:
+					full_name = dp.name
+				self.messages.append(Message(full_name, dp))
+				add_messages(full_name, dp.nested_type)
+		add_messages(fdp.package, fdp.message_type)
 
 	def render(self, msg):
 		return render(msg, self)
 
 	def filename(self):
-		return self.module.DESCRIPTOR.name.split(".")[0]
+		return self.fdp.name[:-len(".proto")]
 
 	def source_filename(self):
 		return self.filename()+".pb-iter.c"
@@ -851,8 +846,8 @@ class Module(object):
 		for message in self.messages:
 			r += message.readers()
 		# hack for force add read_uint32
-		r.append(_uint32(None).reader())
-		r.append(_int32(None).reader())
+		r.append(_uint32(None, None).reader())
+		r.append(_int32(None, None).reader())
 		return "\n\n".join(sorted(list(set(r))))
 
 	def unpackers(self):
@@ -867,27 +862,29 @@ class Module(object):
 			out += message.header()
 		return out
 
-def generate(filename):
-	if not filename.endswith(".py"):
-		print "Wrong python protobuf file: %s" % filename
-		return
-	module_name = filename[:-3]
-	PROTO_DIR = os.path.abspath(os.path.dirname(filename))
-	if not PROTO_DIR in sys.path: sys.path.insert(0, PROTO_DIR)
+def generate(res, fdp):
+	module = Module(fdp)
 
-	module_imported = __import__(module_name, globals(), locals(), [], -1)
+	h_file = res.file.add()
+	h_file.name = module.header_filename()
+	h_file.content = module.header()
 
-	module = Module(module_imported)
-
-	f = open(os.path.join(PROTO_DIR,module.source_filename()),"w")
-	f.write(module.source())
-	f.close()
-
-	f = open(os.path.join(PROTO_DIR,module.header_filename()),"w")
-	f.write(module.header())
-	f.close()
+	c_file = res.file.add()
+	c_file.name = module.source_filename()
+	c_file.content = module.source()
 
 if __name__ == '__main__':
-	for fn in sys.argv[1:]:
-		generate(fn)
+	import sys
+	import google.protobuf.compiler.plugin_pb2 as plugin
 
+	req = plugin.CodeGeneratorRequest()
+	res = plugin.CodeGeneratorResponse()
+
+	req.ParseFromString(sys.stdin.read())
+
+	for fdp in req.proto_file:
+		if not fdp.name.endswith('.proto'):
+			raise Exception("expected .proto file, got %s" % fdp.name)
+		generate(res, fdp)
+
+	print res.SerializeToString(),

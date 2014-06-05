@@ -13,21 +13,12 @@ benchmark_cpp_LDFLAGS = -lprotobuf -lpthread
 
 CLEANFILES = *.pb-c.[ch] *.pb-iter.[ch] *.pyc *.pb.cc *.pb.h
 
-test.pb-c.c: test.proto
-	protoc-c --c_out=. test.proto
-test_pb2.py: test.proto
-	protoc --python_out=. test.proto
-test.pb-iter.c: test_pb2.py
-	python ../../protobuf-c-iter-unpack.py test_pb2.py
-test.pb.cc: test.proto
-	protoc --cpp_out=. test.proto
+%.pb-c.c %.pb-c.h: %.proto
+	protoc-c --c_out=. $<
 
-ssrtb_v6.pb-c.c: ssrtb_v6.proto
-	protoc-c --c_out=. ssrtb_v6.proto
-ssrtb_v6_pb2.py: ssrtb_v6.proto
-	protoc --python_out=. ssrtb_v6.proto
-ssrtb_v6.pb-iter.c: ssrtb_v6_pb2.py
-	python ../../protobuf-c-iter-unpack.py ssrtb_v6_pb2.py
-ssrtb_v6.pb.cc: ssrtb_v6.proto
-	protoc --cpp_out=. ssrtb_v6.proto
+%.pb-iter.c %.pb-iter.h: %.proto
+	protoc --plugin=protoc-gen-c-iter=../../protoc-gen-c-iter --c-iter_out=. $<
+
+%.pb.cc %.pb.h: %.proto
+	protoc --cpp_out=. $<
 

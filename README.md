@@ -1,6 +1,6 @@
 ## Description
 
-protobuf-c-iter-unpack - fast unpacker for [protobuf-c](http://code.google.com/p/protobuf-c/).
+protobuf-c-iter-unpack - fast unpacker for [protobuf-c](https://github.com/protobuf-c/protobuf-c).
 
 Focused on unpacking messages in the same pre-allocated buffer.
 
@@ -11,23 +11,26 @@ Focused on unpacking messages in the same pre-allocated buffer.
 * Supports all field types
 * Does not check the required fields during the parse (as protobuf-c)
 * Supports packed repeated data (as protobuf-c)
-* Supports merge sub-messages (protobuf-c [not support](http://code.google.com/p/protobuf-c/issues/detail?id=91))
-* Written for protobuf-c 0.15
+* Supports merge sub-messages (as protobuf-c)
+* Written for protobuf-c 1.0.0
 
-## Usage
+## Installation
 
 You must have installed google protobuf library (and python binding)
+
+Install protoc-gen-c-iter script into any dir accessible via $PATH:
+```sh
+sudo install -m 755 protoc-gen-c-iter /usr/local/bin/
+```
+
+## Usage
 
 Generate source and headers:
 ```sh
 # create test.pb-c.h and test.pb-c.c
 protoc-c --c_out=. test.proto
-# create test_pb2.py for protobuf-c-iter-unpack
-protoc --python_out=. test.proto
 # create test.pb-iter.h and test.pb-iter.c
-protobuf-c-iter-unpack.py test_pb2.py
-# test_pb2.py no longer needed
-rm test_pb2.py
+protoc --c-iter_out=. test.proto
 ```
 
 Example:
