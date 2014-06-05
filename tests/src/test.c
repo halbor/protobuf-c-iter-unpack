@@ -276,7 +276,9 @@ int test_types() {
   MergeTest* f_merge = (MergeTest*)iter_msg_buffer;
   unpack_result = merge_test__iter_unpack(MERGE_TEST, sizeof(MERGE_TEST), iter_msg_buffer, sizeof(iter_msg_buffer));
   
-  testTrue( (c_merge->submsg->f1==777) && (c_merge->submsg->f2==0), "protobuf-c not merged submessage");
+  /* https://code.google.com/p/protobuf-c/issues/detail?id=91 */
+  /* fixed in 1.0.0-rc1 https://github.com/protobuf-c/protobuf-c */
+  testTrue( (c_merge->submsg->f1==777) && (c_merge->submsg->f2==42), "protobuf-c not merged submessage");
   testTrue( (f_merge->submsg->f1==777) && (f_merge->submsg->f2==42), "protobuf-c-iter-unpack merged submessage"); 
 
   return 1;
@@ -298,7 +300,8 @@ int test_validation() {
   int unpack_result = 0;
   RequiredField2* c_req = required_field2__unpack(NULL, sizeof(F1V10), F1V10);
   unpack_result = required_field2__iter_unpack(F1V10, sizeof(F1V10), iter_msg_buffer, sizeof(iter_msg_buffer));
-  testTrue((c_req != NULL) && (unpack_result >= 0),"don't validate required");
+  /* protobuf_c_message_unpack() refuses to unpack incomplete messages (with missing required fields) */
+  testTrue((c_req == NULL) && (unpack_result >= 0),"don't validate required");
 
   StringField* c_string = string_field__unpack(NULL, sizeof(ZERO_BYTE_STRING), ZERO_BYTE_STRING);
   StringField* f_string = (StringField*)iter_msg_buffer;

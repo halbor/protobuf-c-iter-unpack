@@ -98,8 +98,6 @@ int main() {
   ProtobufCAllocator perf_allocator = {
     perf_system_alloc,
     perf_system_free,
-    NULL,
-    65535,
     &allocator_data
   };
   
