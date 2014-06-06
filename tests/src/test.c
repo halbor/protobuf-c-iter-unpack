@@ -11,6 +11,28 @@
 
 uint8_t iter_msg_buffer[50*1024];
 
+static size_t pba_allocated = 0;
+
+static void *pba_alloc(void *ctx, size_t sz)
+{
+  if (pba_allocated + sz > sizeof(iter_msg_buffer)) {
+    return 0;
+  }
+  void *ret = iter_msg_buffer + pba_allocated;
+  pba_allocated += sz;
+  return ret;
+}
+
+static void pba_free(void *ctx, void *ptr)
+{
+}
+
+static ProtobufCAllocator pba = {
+  .alloc = pba_alloc,
+  .free = pba_free,
+};
+
+
 int testTrue(int v, char* message) {
   if (v) {
     printf("%s ... ok\n", message);
@@ -23,15 +45,18 @@ int testTrue(int v, char* message) {
 
 #define types_clean_msg() types__init(types_msg)
 
-#define types_pack_and_iter_unpack() \
+#define types_pack_and_iter_unpack() do { \
   packed_size = types__pack(types_msg, pack_buffer);\
-  types__iter_unpack(pack_buffer, packed_size, iter_msg_buffer, sizeof(iter_msg_buffer));
+  pba_allocated = 0; \
+  Types* types_new_msg; \
+  types__iter_unpack(&types_new_msg, pack_buffer, packed_size, &pba); \
+  } while (0)
 
 int test_types() {
   Types _types_msg;
-  Types* types_msg = &_types_msg;
+  Types* const types_msg = &_types_msg;
 
-  Types *types_iter_msg = (Types*)iter_msg_buffer;
+  Types* const types_iter_msg = (Types*)iter_msg_buffer;
   uint8_t pack_buffer[50*1024];
   int packed_size;
   int unpack_result;
@@ -265,7 +290,7 @@ int test_types() {
 
   PackedField* c_packed = packed_field__unpack(NULL, sizeof(REPEATED_PACKED), REPEATED_PACKED);
   PackedField* f_packed = (PackedField*)iter_msg_buffer;
-  unpack_result = packed_field__iter_unpack(REPEATED_PACKED, sizeof(REPEATED_PACKED), iter_msg_buffer, sizeof(iter_msg_buffer));
+  unpack_result = packed_field__iter_unpack(&f_packed, REPEATED_PACKED, sizeof(REPEATED_PACKED), &pba);
   testTrue(unpack_result>=0, "unpack repeated packed");
   if (testTrue( (f_packed->n_f1==6) && (f_packed->n_f1==c_packed->n_f1), "packed repeated len")) {
     testTrue(f_packed->f1[0]==10, "packed repeated item 0");
@@ -274,7 +299,7 @@ int test_types() {
 
   MergeTest* c_merge = merge_test__unpack(NULL, sizeof(MERGE_TEST), MERGE_TEST);
   MergeTest* f_merge = (MergeTest*)iter_msg_buffer;
-  unpack_result = merge_test__iter_unpack(MERGE_TEST, sizeof(MERGE_TEST), iter_msg_buffer, sizeof(iter_msg_buffer));
+  unpack_result = merge_test__iter_unpack(&f_merge, MERGE_TEST, sizeof(MERGE_TEST), &pba);
   
   /* https://code.google.com/p/protobuf-c/issues/detail?id=91 */
   /* fixed in 1.0.0-rc1 https://github.com/protobuf-c/protobuf-c */
@@ -287,7 +312,7 @@ int test_types() {
 int test_openx() {
   BidRequest* c = bid_request__unpack(NULL, sizeof(OPENX_1), OPENX_1);
   BidRequest* f = (BidRequest*)iter_msg_buffer;
-  bid_request__iter_unpack(OPENX_1, sizeof(OPENX_1), iter_msg_buffer, sizeof(iter_msg_buffer));
+  bid_request__iter_unpack(&f, OPENX_1, sizeof(OPENX_1), &pba);
   
   testTrue(c->matching_ad_ids[0]->campaign_id==f->matching_ad_ids[0]->campaign_id, "OpenX equal Matching Ad Id");
   
@@ -299,16 +324,18 @@ int test_openx() {
 int test_validation() {
   int unpack_result = 0;
   RequiredField2* c_req = required_field2__unpack(NULL, sizeof(F1V10), F1V10);
-  unpack_result = required_field2__iter_unpack(F1V10, sizeof(F1V10), iter_msg_buffer, sizeof(iter_msg_buffer));
+  RequiredField2* c_req2;
+  unpack_result = required_field2__iter_unpack(&c_req2, F1V10, sizeof(F1V10), &pba);
   /* protobuf_c_message_unpack() refuses to unpack incomplete messages (with missing required fields) */
   testTrue((c_req == NULL) && (unpack_result >= 0),"don't validate required");
 
   StringField* c_string = string_field__unpack(NULL, sizeof(ZERO_BYTE_STRING), ZERO_BYTE_STRING);
   StringField* f_string = (StringField*)iter_msg_buffer;
-  unpack_result = string_field__iter_unpack(ZERO_BYTE_STRING,  sizeof(ZERO_BYTE_STRING),  iter_msg_buffer, sizeof(iter_msg_buffer));
+  unpack_result = string_field__iter_unpack(&f_string, ZERO_BYTE_STRING,  sizeof(ZERO_BYTE_STRING),  &pba);
   testTrue((f_string->f1 != NULL) && (strcmp(c_string->f1,f_string->f1)==0),"don't validate string");
 
-  unpack_result = types__iter_unpack(NEGATIVE_LENGTH_STRING,  sizeof(NEGATIVE_LENGTH_STRING),  iter_msg_buffer, sizeof(iter_msg_buffer));
+  Types *msg;
+  unpack_result = types__iter_unpack(&msg, NEGATIVE_LENGTH_STRING,  sizeof(NEGATIVE_LENGTH_STRING), &pba);
   
   testTrue(unpack_result == PROTOBUF_C_ITER_WRONG_MESSAGE, "string length overflow");
   

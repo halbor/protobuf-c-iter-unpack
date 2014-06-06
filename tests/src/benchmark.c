@@ -10,7 +10,7 @@
 
 typedef struct {
   size_t index;
-  char buffer[65535];
+  char buffer[65536];
 } FakeAllocatorData;
 
 static void *perf_system_alloc(void *adata, size_t size) {
@@ -29,15 +29,18 @@ static void perf_system_free (void *adata, void *data){
 #define benchmark_bid_request__unpack bid_request__unpack
 #define benchmark_bid_request__free_unpacked bid_request__free_unpacked
 
-#define RunFastBenchmark(type, type_string, data)   \
+#define RunFastBenchmark(type, type_string, c_type, data)   \
   gettimeofday(&tv1, NULL); \
   for (i=0; i<NLOOP; i++) { \
-    if (benchmark_##type##__iter_unpack(data##_1, sizeof(data##_1), \
-                     iter_msg_buffer, iter_msg_buffer_size) < 0) { \
+    c_type *obj; \
+    allocator_data.index = 0; \
+    if (benchmark_##type##__iter_unpack(&obj, data##_1, sizeof(data##_1), \
+                     &perf_allocator) < 0) { \
       printf("protobuf-c-iter %s unpack failed\n", type_string); \
     } \
-    if (benchmark_uint32__iter_unpack(data##_2, sizeof(data##_2), \
-                     iter_msg_buffer, iter_msg_buffer_size) < 0) { \
+    allocator_data.index = 0; \
+    if (benchmark_##type##__iter_unpack(&obj, data##_2, sizeof(data##_2), \
+                     &perf_allocator) < 0) { \
       printf("protobuf-c-iter %s unpack failed\n", type_string); \
     } \
   } \
@@ -89,9 +92,6 @@ int main() {
   int i = 0;
   double delta;
   
-  uint8_t iter_msg_buffer[65535];
-  size_t iter_msg_buffer_size = 65535;
-  
   FakeAllocatorData allocator_data;
   allocator_data.index = 0;
   
@@ -103,23 +103,23 @@ int main() {
   
   struct timeval tv1, tv2;
 
-  RunFastBenchmark(uint32, "uint32", BENCMARK_UINT32_DATA);
+  RunFastBenchmark(uint32, "uint32", BenchmarkUINT32, BENCMARK_UINT32_DATA);
   RunProtocFastBenchmark(uint32, "uint32", BENCMARK_UINT32_DATA);
   RunProtocMallocBenchmark(uint32, "uint32", BENCMARK_UINT32_DATA, BenchmarkUINT32);
   
-  RunFastBenchmark(fixed32, "fixed32", BENCMARK_FIXED32_DATA);
+  RunFastBenchmark(fixed32, "fixed32", BenchmarkFixed32, BENCMARK_FIXED32_DATA);
   RunProtocFastBenchmark(fixed32, "fixed32", BENCMARK_FIXED32_DATA);
   RunProtocMallocBenchmark(fixed32, "fixed32", BENCMARK_FIXED32_DATA, BenchmarkFixed32);
   
-  RunFastBenchmark(fixed64, "fixed64", BENCMARK_FIXED64_DATA);
+  RunFastBenchmark(fixed64, "fixed64", BenchmarkFixed64, BENCMARK_FIXED64_DATA);
   RunProtocFastBenchmark(fixed64, "fixed64", BENCMARK_FIXED64_DATA);
   RunProtocMallocBenchmark(fixed64, "fixed64", BENCMARK_FIXED64_DATA, BenchmarkFixed64);
   
-  RunFastBenchmark(string, "string", BENCMARK_STRING_DATA);
+  RunFastBenchmark(string, "string", BenchmarkString, BENCMARK_STRING_DATA);
   RunProtocFastBenchmark(string, "string", BENCMARK_STRING_DATA);
   RunProtocMallocBenchmark(string, "string", BENCMARK_STRING_DATA, BenchmarkString);
   
-  RunFastBenchmark(bid_request, "openx bid request", OPENX);
+  RunFastBenchmark(bid_request, "openx bid request", BidRequest, OPENX);
   RunProtocFastBenchmark(bid_request, "openx bid request", OPENX);
   RunProtocMallocBenchmark(bid_request, "openx bid request", OPENX, BidRequest);
   
