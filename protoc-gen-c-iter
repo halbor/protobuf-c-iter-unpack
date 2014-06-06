@@ -38,7 +38,7 @@ static ${MessageType} ${MessageType}__empty = ${MESSAGE_TYPE}__INIT;
 int ${message_type}__iter_unpack_merge(${MessageType}* object, const uint8_t* buffer, size_t buffer_size, uint8_t* memory, size_t memory_size) {
 	const uint8_t* buffer_end = buffer+buffer_size;
 	const uint8_t* memory_end = memory+memory_size;
-	${additionally_variables}
+	${additional_variables}
 
 	while (buffer < buffer_end) {
 		${switch_tree}
@@ -750,7 +750,7 @@ class Message(object):
 				return True
 		return False
 
-	def additionally_variables(self):
+	def additional_variables(self):
 		out = []
 		if self.has_packed_fields():
 			out.append("const uint8_t* tmp_buffer_pointer = NULL;")

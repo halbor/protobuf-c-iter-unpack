@@ -16,7 +16,7 @@ Focused on unpacking messages in the same pre-allocated buffer.
 
 ## Installation
 
-You must have installed google protobuf-2.4.1+ library (and python binding)
+You must have installed google protobuf-2.4.1+ library, compiler and python binding.
 
 Install protoc-gen-c-iter script into any dir accessible via $PATH:
 ```sh
