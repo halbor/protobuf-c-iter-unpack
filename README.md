@@ -36,16 +36,16 @@ protoc --c-iter_out=. test.proto
 Example:
 ```c
 // pre-allocate buffer
-uint8_t iter_msg_buffer[65535];
+uint8_t iter_msg_buffer[65536];
 size_t iter_msg_buffer_size = sizeof(iter_msg_buffer);
 
 TestMessage* msg = (TestMessage*)iter_msg_buffer;
 
 int ret = test_message__iter_unpack(input_buffer, input_buffer_length, iter_msg_buffer, iter_msg_buffer_size);
 
-if (ret == -2) {
+if (ret == PROTOBUF_C_ITER_NOT_ENOUGH_MEMORY) {
   printf("iter_msg_buffer to small for unpack\n");
-} else if (ret == -1) {
+} else if (ret == PROTOBUF_C_ITER_WRONG_MESSAGE) {
   printf("can't unpack message from input_buffer\n");
 } else if (ret < 0) {
   printf("unknown error: %d\n", ret);
