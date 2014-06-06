@@ -310,7 +310,7 @@ int test_validation() {
 
   unpack_result = types__iter_unpack(NEGATIVE_LENGTH_STRING,  sizeof(NEGATIVE_LENGTH_STRING),  iter_msg_buffer, sizeof(iter_msg_buffer));
   
-  testTrue(unpack_result == PROTOBUF_ITER_WRONG_MESSAGE, "string length overflow");
+  testTrue(unpack_result == PROTOBUF_C_ITER_WRONG_MESSAGE, "string length overflow");
   
   return 1;
 }
