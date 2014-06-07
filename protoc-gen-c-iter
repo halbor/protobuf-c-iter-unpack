@@ -40,8 +40,13 @@ int ${message_type}__iter_unpack_merge(${MessageType}* object, const uint8_t* bu
 	const uint8_t* memory_end = memory+memory_size;
 	${additional_variables}
 
+	unsigned required_count = ${required_count};
+
 	while (buffer < buffer_end) {
 		${switch_tree}
+	}
+	if (required_count != 0) {
+		return PROTOBUF_C_ITER_WRONG_MESSAGE;
 	}
 	return memory_size-(memory_end-memory);
 }
@@ -424,6 +429,16 @@ class _base(object):
 			return "object->has_${name} = 1;"
 		return ""
 
+	def check_required(self):
+		if self.is_required():
+			return """
+if (!${name}_readed) {
+	required_count--;
+	${name}_readed++;
+}
+			"""
+		return ""
+
 	def read_function(self):
 		return "read_${type_name}"
 
@@ -437,6 +452,7 @@ class _base(object):
 		return self.render("""
 			if ((buffer=${read_function}(&(object->${name}), buffer, buffer_end))==NULL) ERROR_UNPACK;
 			${has_value_set_true}
+			${check_required}
 		""")
 
 	def read_packed(self):
@@ -659,6 +675,7 @@ class _submessage(_base):
 				} else {
 					t = ${submessage_merge}(${read_to_field}, buffer-length, length, memory, memory_end-memory);
 				}
+				${check_required}
 			"""
 
 		ret+= """
@@ -691,6 +708,7 @@ class _bytes(_base):
 			buffer += ${read_to_field}.len;
 			${repeated_increment_count}
 			${has_value_set_true}
+			${check_required}
 		""")
 
 #####################
@@ -750,6 +768,13 @@ class Message(object):
 				return True
 		return False
 
+	def required_count(self):
+		req_cnt = 0
+		for f in self.fields:
+			if f.is_required():
+				req_cnt += 1
+		return self.render("%d" % req_cnt)
+
 	def additional_variables(self):
 		out = []
 		if self.has_packed_fields():
@@ -760,6 +785,10 @@ class Message(object):
 			out.append("uint32_t length = 0;")
 		if len(self.fields) == 0:
 			out.append("(void) object;")
+
+		for f in self.fields:
+			if f.is_required():
+				out.append("int %s_readed = 0;" % f.name())
 		return self.render("\n".join(out))
 
 	def header(self):
